@@ -1,0 +1,23 @@
+---
+title: "assignment.Rmd"
+author: "Maya Rassouli"
+date: "24/02/2023"
+output: html_document
+---
+
+```{r setup}
+library(epiwraps)
+```
+
+
+```{r session}
+sessionInfo()
+
+```
+
+
+
+```
+
+```
+
