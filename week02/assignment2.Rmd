@@ -1,0 +1,63 @@
+---
+title: "Assignment2"
+author: "Maya Rassouli"
+date: "2023-03-03"
+output: html_document
+---
+## 1
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(ensembldb)
+  library(GenomicRanges)
+  library(epiwraps)
+})
+ah = AnnotationHub()
+ah
+```
+
+```{r mouse (Mus Musculus) EnsDb object, version 102, genome build GRCm38}
+mus_musculus <- query(ah, c("Mus Musculus", "ensembl", "version 102", "GRCm38"))
+mus_musculus
+mus_musculus_nnsb <- ah[["AH89211"]]
+```
+
+```{r mouse genome sequence (dna_sm) in TwoBit/2bit format for GRCm38}
+
+mus_musculus_genome <- query(ah, c("Mus Musculus","GRCm38","dna_sm", "2bit"))
+mus_musculus_genome
+mus_genome_nnsb <- ah[["AH88477"]]
+mus_genome_nnsb
+```
+
+```{r drosophila melanogaster genome sequence (dna_sm) in TwoBit/2bit format for BDGP6}
+drosophila <- query(ah, c("Drosophila Melanogaster", "dna_sm", "BDGP6", "2bit"))
+drosophila
+drosophila_nnsb <- ah[["AH106160"]]
+drosophila_nnsb
+```
+
+## 2 Mouse EnsDb
+
+```{r how many different ensemble gene IDs and gene symbols are there for protein-coding genes?}
+gns <- genes(mus_musculus_nnsb, column =c("gene_id", "symbol"), filter=GeneBiotypeFilter("protein_coding"))
+gns
+
+length(unique(gns$gene_id))
+length(unique(gns$symbol))
+
+
+```
+
+```{r plot the distribution of the (spliced) length of protein-coding transcripts}
+
+# the exons split by protein-coding transcripts
+exsPerTx <- exonsBy(mus_musculus_nnsb, column=c("tx_id","tx_biotype"), 
+                    filter=TxBiotypeFilter("protein_coding"))
+exsPerTx
+#sum the width of exons
+spliced <- sum(width(exsPerTx))
+hist(spliced, breaks = 150, main = "Distribution of the (spliced) Length of protein-coding Transcripts", xlab = "Spliced Length")
+```
+
