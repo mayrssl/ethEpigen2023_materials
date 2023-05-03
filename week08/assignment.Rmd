@@ -1,0 +1,160 @@
+---
+title: "assignment"
+author: "Maya Rassouli"
+date: "2023-05-03"
+output: html_document
+---
+```{r}
+library(SummarizedExperiment)
+
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(motifmatchr)
+  library(MotifDb)
+  library(universalmotif)
+  library(sechm)
+  library(BiocParallel)
+  library(ggplot2)
+  library(chromVAR) # for motif accessibility estimation
+  library(SummarizedExperiment) # data structure
+  library(limma) # for statistical analysis
+})
+
+# to control multithreading, for windows:
+register(SerialParam())
+# register(SnowParam(2))
+```
+
+#Download ATAC-seq peak counts in the hippocampus upon stress : 
+
+```{r, eval=FALSE}
+# download data
+options(timeout=6000)
+download.file("https://ethz-ins.org/content/mouse_mm38_hippocampus.peakCounts.SE.rds", "mouse_mm38_hippocampus.peakCounts.SE.rds", mode="wb")
+unzip("mouse_mm38_hippocampus.peakCounts.SE.rds")
+
+#get the database of motifs
+library(MotifDb)
+motif <- query(MotifDb, "Mmusculus")
+motif
+motifs <- query(MotifDb, c("HOCOMOCOv10", "Mmusculus"))
+motifs <- do.call(TFBSTools::PWMatrixList, setNames(
+           universalmotif::convert_motifs(motifs, class="TFBSTools-PWMatrix"),
+           mcols(motifs)$providerName))
+
+# load the data object
+se <- readRDS("mouse_mm38_hippocampus.peakCounts.SE.rds")
+colnames(se)
+se$condition <- rep(c("Control", "FSS"), each=6)
+se$sex <- rep(rep(c("female", "male"), each=3), 2)
+colData(se)
+
+# Perform a chromVAR motif analysis
+
+#correct for GC bias
+se <- chromVAR::addGCBias(se, genome=genome_seq)
+
+#find which peaks contain which motifs
+moi <- motifmatchr::matchMotifs(motifs, subject=se, genome=genome_seq)
+
+#compute deviation scores
+dev <- chromVAR::computeDeviations(object = se, annotations=moi,background_peaks=getBackgroundPeaks(se, niterations=1000))
+dev
+
+#check the column data of deviation object
+colData(dev)
+
+#compute variability for deviation scores
+variability <- computeVariability(dev)
+plotVariability(variability)
+
+#scale deviation scores
+head(assays(dev)$z)
+assays(dev)$norm <- scale(assays(dev)$z)
+dev
+
+
+# Run 2 differential motif accessibility analyses:
+
+## comparing stressed (FSS) and control animals
+
+#compare FSS and Controls
+dev$condition
+
+#Specifiy the baseline condition
+dev$condition <- factor(dev$condition)
+
+#Set the baseline to Control
+dev$condition <- relevel(dev$condition, "Control")
+
+#create a model matrix for comparison
+mm_cond <- model.matrix(~condition, data=as.data.frame(colData(dev)))
+mm_cond
+
+#fit a linear model and perform empirical Bayes moderated t-tests
+fit_cond <- eBayes(lmFit(assays(dev)$norm, mm_cond))
+
+### report the top most significant motifs
+
+#create a data frame with the top results and add TF names
+res_cond <- as.data.frame(topTable(fit_cond, coef="conditionFSS", number = Inf))
+head(res_cond)
+res_cond$TF <- row.names(res_cond)
+
+#number of significant motifs (p-value < 0.05)
+significant_motifs_number_cond <- length(rownames(res_cond[res_cond$adj.P.Val < 0.05,]))
+print(paste(significant_motifs_number_cond, "motifs are significant based on condition differences"))
+
+### plot a heatmap of the normalized accessibility scores across the samples
+
+#plot the results with a heatmap
+ggplot(res_cond, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text() 
+
+sechm(dev, features = head(row.names(res_cond)), assayName="norm", top_annotation = c("condition", "sex"), cluster_cols=TRUE)
+
+### write a short paragraph interpreting the results
+#In the heatmap, the yellow color in the FSS state corresponds to higher motif accessibility values, and the blue/black color in the control state corresponds to lower motif accessibility values.
+This suggests that the accessibility of the motifs for GCR and PRGR are higher in the stressed (FSS) condition compared to the control (CTRL) condition.
+
+
+##comparing male and female animals
+
+dev
+
+#compare male and female
+dev$sex
+
+#Specifiy the baseline condition
+dev$sex <- factor(dev$sex)
+
+#Set the baseline to male
+dev$sex <- relevel(dev$sex, "female")
+
+#create a model matrix for comparison
+mm_sex <- model.matrix(~sex, data=as.data.frame(colData(dev)))
+mm_sex
+
+#fit a linear model and perform empirical Bayes moderated t-tests
+fit_sex <- eBayes(lmFit(assays(dev)$norm, mm_sex))
+
+### report the top most significant motifs
+
+#create a data frame with the top results and add TF names
+res_sex <- as.data.frame(topTable(fit_sex, coef="sexmale", number = Inf))
+head(res_sex)
+res_sex$TF <- row.names(res_sex)
+
+#number of significant motifs (p-value < 0.05)
+significant_motifs_number_sex <- length(rownames(res_sex[res_sex$adj.P.Val < 0.05,]))
+print(paste(significant_motifs_number_sex, "motifs are significant based on sex differences"))
+
+### plot a heatmap of the normalized accessibility scores across the samples
+
+#plot the results with a heatmap
+ggplot(res_sex, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text() 
+
+sechm(dev, features = head(row.names(res_sex)), assayName="norm", top_annotation = c("sex", "condition"), cluster_cols=TRUE)
+
+### write a short paragraph interpreting the results
+# The transcription factors WT1, Z324A, THAP1, ZN384, TYY1, and ZFP42 have higher accessibility scores in females (yellow) than in males (black/yellow). This suggests that the accessibility scores are dependent of gender, which is unexpected. ```
+ 
