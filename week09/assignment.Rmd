@@ -1,0 +1,51 @@
+---
+title: "assignment"
+author: "Maya Rassouli"
+date: "2023-05-05"
+output: html_document
+---
+
+#Preliminary plan for my project: 
+
+
+##1 What is the topic?
+
+Paper : Comparative chromatin accessibility upon BDNF stimulation delineates neuronal regulatory elements
+
+The neuronal stimulation induced by BDNF triggers gene expression involved in neuronal survival, differentiation, synaptic plasticity, memory formation and neurocognitive health. 
+The role of BDNF in chromatin regulation is still unclear. It is also unclear if the BDNF-induced chromatin changes are related to specific brain disorders and if changes in chromatin features induced by BDNF differ from other stimulatory events. 
+
+Comparative analysis of epigenomic data helps define the role of regulatory elements. 
+For a comparatives analysis of chromatin responses, neuronal stimulation induced by an elevated level of extracellular potassium chloride (KCl) is helpful; while BDNF stimulation activates mainly MAPK signaling pathway, KCl stimulation induces membrane depolarization and intracellular calcium rise, which triggers a series of calcium-dependent signaling events resulting in activation of TFs in the nucleus. 
+
+They temporally profiled genome-scale changes in chromatin accessibility and transcription in mouse primary cortical neurons (CNs) following stimulation by BDNF or depolarization by KCl. 
+Their data analyses revealed changes in chromatin accessibility and the impact of these changes on gene expression in response to BDNF, compared to depolarization by KCl. 
+
+Experimental design : 
+They stimulated cultured CNs with BDNF, KCl or no treatment (control) and they prepared the stimulated neurons for RNA-seq and ATAC-seq at 3 specific timepoints: early (1h) and late (6 and 10h). 
+
+Data analysis : 
+To understand the regulatory basis of BDNF- and KCl-induced gene expression, they quantified chromatin accessibility dynamics in the same samples using the ATAC-seq. They identified 58,724 peaks, of which 15,566/6,052 were differentially accessible (DA-peaks) across any condition. The clustering of DA-peaks showed a distinct separation between stimuli, but unlike the DE-gene results, chromatin response upon BDNF induction was not clearly separated into early and late responses. They thus separated DA-peaks as gained DA-peaks (increased chromatin accessibility compared to control) and closing DA-peaks (decreased chromatin accessibility compared to control), and classified them by time fo their first occurence. 
+
+Given that chromatin accessibility in distal elements was partially shared between BDNF and KCl, they explored common and specific TF activity after stimulation. To identify TF-binding motifs in each set of gained and closing DA-peaks, they quantify TF motif enrichment in comparison with mouse specific negative control regions. 
+
+##2 What data will I be using?
+ 
+I will use the data from the processed peaks deposited in Gene Expression Omnibus (GEO), with accession code
+GSE166959 : http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE166959
+
+```{r}
+download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE166959&format=file&file=GSE166959%5FDA%5Fpeaks%2Etsv%2Egz", "GSE166959_DA_peaks.tsv.gz") 
+download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE166959&format=file&file=GSE166959%5FDE%5Fgenes%2Etsv%2Egz", "GSE166959_DE_genes.tsv.gz")
+```
+
+The data is in tsv (tab-separated values) format. 
+
+
+##3 What are the analyses I wish to reproduce, or the questions I wish to answer?
+
+I want to reproduce the motif accessibility analysis by performing a chromVAR motif analysis and running a differential motif accessibility analysis comparing BDNF and KCl treatment in CNs.
+
+I also want to explore the TF activity after stimulation by performing a motif activity analysis (which will include motif scanning, motif enrichment analysis and motif discovery). 
+
+I am not sure about the project load and the specific questions I want to answer, please don't hesitate to lead me to more specific goals. Thanks for the suggestions. 
