@@ -1,0 +1,120 @@
+---
+title: "assignment"
+author: "Maya Rassouli"
+date: "2023-05-24"
+output: html_document
+---
+```{r}
+install.packages("pheatmap")
+BiocManager::install("DMRcate")
+BiocManager::install("ETHZ-INS/epiwraps")
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(bsseq)
+  library(BiocParallel)
+  library(edgeR)
+  library(DMRcate)
+  library(rtracklayer)
+  library(sechm)
+  library(pheatmap)
+  library(viridis)
+  library(data.table)
+})
+
+set.seed(40)
+```
+
+```{r}
+options(timeout = 6000)
+download.file("https://ethz-ins.org/content/w11_practical.zip", "w11_practical.zip")
+unzip("w11_practical.zip")
+```
+
+```{r}
+bs <- readRDS("bs.rds")
+rowRanges(bs)
+pData(bs)
+```
+
+# Plot a heatmap of the methylation levels of the genes in top 5 DMR regions
+
+```{r}
+# genes
+ah <- AnnotationHub()
+ensdb <- ah[["AH109336"]]
+
+chr22 <- GRanges(Seqnames=Rle(c("22")), ranges = IRanges(a, end=195471971))
+genesChr22 <- genes(ensdb, columns=c("gene_seq_start", "gene_seq_end", "gene_name"), filter=GRangesFilter(chr22))
+seqlevelsStyle(genesChr22) <- "UCSC"
+```
+
+```{r}
+design <- model.matrix(~Type+Pair, data=pData(bs)) # design matrix
+
+# adapt for methylation data
+methdesign <- modelMatrixMeth(design)
+
+seqAnnot <- sequencing.annotate(bs, methdesign, all.cov=TRUE, coef="Typenormal")
+dmrcateRes <- dmrcate(seqAnnot, C=2, min.cpgs = 10, pcutoff=0.01)
+
+dmrRanges <- extractRanges(dmrcateRes, genome="hg38")
+saveRDS(dmrRanges, "dmr.rds")
+
+DMR.plot(dmrRanges, dmr=1,phen.col=c(rep("red", 3), rep("green",3)), CpGs=bs, genome="hg38")
+dmrRangesGenes <- dmrRanges[!is.na(dmrRanges$overlapping.genes)]
+
+# Get the genes within Differentially methylated regions
+topIdx <- order(dmrRangesGenes$min_smoothed_fdr)[1:5]
+genesDmr <- unlist(tstrsplit(dmrRangesGenes[topIdx]$overlapping.genes, split=", "))
+genesDmr <- genesDmr[!is.na(genesDmr)]
+dmrGenes <- genesChr22[genesChr22$gene_name %in% genesDmr]
+dmrGenes
+```
+
+Retrieve metyhlation levels and visualize:
+```{r, look at bsseq objects}
+metg <- bsseq::getMeth(bs, 
+                        regions=genesChr22, 
+                        what="perRegion")
+colnames(metg) <- colnames(bs)
+rownames(metg) <- genesChr22$gene_name
+metg <- metg[!is.na(rowSums(metg)),]
+```
+
+```{r} 
+annotationCol <- as.data.frame(pData(bs)[,c("Type","Pair")])
+rownames(annotationCol) <- colnames(metg)
+pheatmap::pheatmap(metg, 
+                   cluster_rows=TRUE,
+                   cluster_cols=FALSE,
+                   annotation_col=annotationCol,
+                   show_rownames = TRUE,
+                   color=rocket(10))
+```
+
+# Run an enrichment analysis (rGREAT) of the genes wihtin DMRs vs all genes of chromosome 22. 
+
+```{r}
+# genes within top 5 DMRs vs all genes of chromosome 22
+job <- submitGreatJob(dmrGenes, bg=genesChr2, species="hg38")
+res <- getEnrichmentTables(job)
+names(res)
+bp <- res$`GO Biological Process`
+head(bp)
+ggplot(head(bp, 15), aes(Hyper_Fold_Enrichment, reorder(breakStrongs(name, 10, "\n"), Hyper_Adjp_BH), size=Hyper_Foreground_Region_Hits, color=-log(Hyper_Adjp-HB))) + geom_point() + scale_color_viridis_c(limits =c(0, 5)) + labs(title = "Biological Processes in TOp 5 DMRs of Chr22", x= "Hyper Fold Enrichment", y= "Biological Process", colour ="Minus Logarithm of the \nAdjuszed Hypergeometric p-Value \n(-log10(Hyper_Adjp_BH))", size = "Hyper Foreground Region Hits") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Describe what your enrichment analysis is testing exactly & describe the results. 
+
+# genes within top 5 DMRs
+The biological processes seem more represented in the top 5 DMRs than in the chromosome 22 genes. 
+Cell-cell adhesion via plasma-membrane adhesion is particularly large, which makes sense with the properties of the cancer cells. 
+
