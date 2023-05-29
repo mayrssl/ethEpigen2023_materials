@@ -4,11 +4,7 @@ author: "Maya Rassouli"
 date: "2023-05-24"
 output: html_document
 ---
-```{r}
-install.packages("pheatmap")
-BiocManager::install("DMRcate")
-BiocManager::install("ETHZ-INS/epiwraps")
-```
+
 
 ```{r}
 suppressPackageStartupMessages({
@@ -51,7 +47,7 @@ pData(bs)
 ah <- AnnotationHub()
 ensdb <- ah[["AH109336"]]
 
-chr22 <- GRanges(Seqnames=Rle(c("22")), ranges = IRanges(a, end=195471971))
+chr22 <- GRanges(seqnames=Rle(c("22")), ranges = IRanges(1, end=195471971))
 genesChr22 <- genes(ensdb, columns=c("gene_seq_start", "gene_seq_end", "gene_name"), filter=GRangesFilter(chr22))
 seqlevelsStyle(genesChr22) <- "UCSC"
 ```
@@ -104,12 +100,12 @@ pheatmap::pheatmap(metg,
 
 ```{r}
 # genes within top 5 DMRs vs all genes of chromosome 22
-job <- submitGreatJob(dmrGenes, bg=genesChr2, species="hg38")
+job <- submitGreatJob(dmrGenes, bg=genesChr22, species="hg38") 
 res <- getEnrichmentTables(job)
 names(res)
 bp <- res$`GO Biological Process`
 head(bp)
-ggplot(head(bp, 15), aes(Hyper_Fold_Enrichment, reorder(breakStrongs(name, 10, "\n"), Hyper_Adjp_BH), size=Hyper_Foreground_Region_Hits, color=-log(Hyper_Adjp-HB))) + geom_point() + scale_color_viridis_c(limits =c(0, 5)) + labs(title = "Biological Processes in TOp 5 DMRs of Chr22", x= "Hyper Fold Enrichment", y= "Biological Process", colour ="Minus Logarithm of the \nAdjuszed Hypergeometric p-Value \n(-log10(Hyper_Adjp_BH))", size = "Hyper Foreground Region Hits") + theme(plot.title = element_text(hjust = 0.5))
+ggplot(head(bp, 15), aes(Hyper_Fold_Enrichment, reorder(name, Hyper_Adjp_BH), size=Hyper_Foreground_Region_Hits, color=-log(Hyper_Adjp_BH))) + geom_point() + scale_color_viridis_c(limits =c(0, 5)) + labs(title = "Biological Processes in TOp 5 DMRs of Chr22", x= "Hyper Fold Enrichment", y= "Biological Process", colour ="Minus Logarithm of the \nAdjuszed Hypergeometric p-Value \n(-log10(Hyper_Adjp_BH))", size = "Hyper Foreground Region Hits") + theme(plot.title = element_text(hjust = 0.5))
 ```
 
 ## Describe what your enrichment analysis is testing exactly & describe the results. 
