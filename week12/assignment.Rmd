@@ -1,0 +1,121 @@
+---
+title: "assignment"
+author: "Maya Rassouli"
+date: "2023-05-26"
+output: html_document
+---
+
+```{r}
+BiocManager::install("DMRcate")
+BiocManager::install("InteractionSet")
+BiocManager::install("ETHZ-INS/epiwraps", force=TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(InteractionSet)
+})
+```
+
+# Choose a TF (p300) and obtain peaks from ENCODE (ChIP-seq in human context)
+```{r}
+# load the p300 peaks 
+download.file("https://www.encodeproject.org/files/ENCFF776TFX/@@download/ENCFF776TFX.bed.gz", "p300.narrowPeak.gz")
+peaks <- rtracklayer::import("p300.narrowPeak.gz")
+seqlevelsStyle(peaks) 
+peaks
+peaks[!duplicated(peaks)]
+
+# gene annotation
+ah <- AnnotationHub()
+ensdb <- ah[["AH95744"]]
+```
+
+# Isolate the peaks that are 
+## 1. between 2.5 kb and 10kb from a TSS
+## 2. more than 10kb from a TSS
+```{r}
+annotatedpeaks <- epiwraps::annotateRegions(peaks, ensdb)
+annotatedpeaks
+
+#1 
+peaks_btw_2.5_and_10 <- annotatedpeaks[annotatedpeaks$distance2nearestTSS>2500 & annotatedpeaks$distance2nearestTSS<10000]
+peaks_btw_2.5_and_10
+
+#2
+peaks_more_10 <- annotatedpeaks[abs(annotatedpeaks$distance2nearestTSS)>10000]
+peaks_more_10
+```
+
+# For each set of peaks, subset to those peaks that have a predicted distal target(s)
+
+```{r}
+# Load interaction data from Salviato et al.
+options(timeout=3600)
+download.file("https://ethz-ins.org/content/hg38.SalviatoDistalEnhancerTargets.GR.rds", "hg38.SalviatoDistalEnhancerTargets.GR.rds")
+gi <- readRDS("hg38.SalviatoDistalEnhancerTargets.GR.rds")
+gi
+seqlevelsStyle(gi)
+```
+ 
+```{r}
+#1
+# get region overlaps
+o1 <- findOverlaps(peaks_btw_2.5_and_10, gi)
+head(o1)
+# add target genes to the peaks
+mcols(peaks_btw_2.5_and_10)[from(o1), "target"] <- gi[to(o1)]$target
+mcols(peaks_btw_2.5_and_10)$target <- CharacterList(mcols(peaks_btw_2.5_and_10)$target)
+
+subset1 <- peaks_btw_2.5_and_10[unique(from(o1))]
+subset1
+
+# remove peaks with no predicted target genes
+subset1 <- subset1[any(!is.na(subset1$target))]
+# remove peaks with no nearest TSS gene name
+subset1 <- subset1[!subset1$nearestTSS.gene_name == ""]
+subset1
+```
+
+```{r}
+#2
+o2 <- findOverlaps(peaks_more_10, gi)
+head(o2)
+ 
+mcols(peaks_more_10)[from(o2), "target"] <- gi[to(o2)]$target
+mcols(peaks_more_10)$target <- CharacterList(mcols(peaks_more_10)$target)
+
+subset2 <- peaks_more_10[unique(from(o2))]
+subset2
+
+subset2 <- subset2[any(!is.na(subset2$target))]
+subset2 <- subset2[!subset2$nearestTSS.gene_name == ""]
+subset2
+```
+
+# For each set of peaks, find the nearest TSS for each peak 
+```{r}
+#1
+subset1$target
+```
+
+```{r}
+#2
+subset2$target
+```
+
+# For each set of peaks, in what proportion of the cases is the predicted target the closest gene? (do not count peaks that don't have interactions with any TSS)
+```{r}
+#1
+sum(any(subset1$nearestTSS.gene_name == subset1$target))/length(subset1)*100
+
+#2
+sum(any(subset2$nearestTSS.gene_name == subset2$target))/length(subset2)*100
+```
+
+Of the genes that are between 2.5 and 10kb from the nearest TSS,  12.6% form an interaction with that nearest gene. 
+
+Of the genes that are more than 10kb away from the nearest TSS,  11% form an interaction with that nearest gene.
